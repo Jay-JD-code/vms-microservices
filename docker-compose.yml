@@ -1,16 +1,31 @@
 version: '3'
+
 services:
+
   api-gateway:
-    build: ./api-gateway
+    build: ./VMS-API-GATEWAY
     ports:
       - "8080:8080"
 
+  auth:
+    build: ./VMS-AUTH
+
   eureka:
-    build: ./eureka-server
+    build: ./VMS-EUREKA-SERVER
     ports:
       - "8761:8761"
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "5173:5173"
+  orders:
+    build: ./VMS-ORDERS
+
+  payments:
+    build: ./VMS-PAYMENTS
+
+  performance:
+    build: ./VMS-PERFORMANCE
+
+  document:
+    build: ./VMS-DOCUMENT
+
+  dashboard:
+    build: ./VMS-DASHBOARD
