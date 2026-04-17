@@ -1,0 +1,16 @@
+version: '3'
+services:
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8080:8080"
+
+  eureka:
+    build: ./eureka-server
+    ports:
+      - "8761:8761"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
