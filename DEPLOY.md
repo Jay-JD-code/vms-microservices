@@ -1,307 +1,262 @@
-# Jenkins + Render Deployment on Oracle Cloud Free Tier
+# VMS Deployment - Railway + Vercel (No Card Required)
 
-## What You Get
+## Architecture
 
-| Resource | Spec | Cost |
-|----------|------|------|
-| Oracle VM | 4 ARM cores, 24GB RAM, 200GB SSD | **Free forever** |
-| Jenkins | CI/CD server | Free |
-| Render | 9 microservices + frontend | Free |
-| Neon DB | PostgreSQL | Free |
+```
+GitHub
 
----
-
-## Step 1: Create Oracle Cloud Account
-
-1. Go to https://cloud.oracle.com
-2. Click **Free Tier** → **Start for free**
-3. Enter payment info (for verification only, won't charge)
-4. After signup, login to the dashboard
-
----
-
-## Step 2: Create VM Instance
-
-1. Dashboard → **Compute** → **Instances** → **Create Instance**
-2. Name: `vms-jenkins`
-3. Image: **Canonical Ubuntu 22.04** (Minimal)
-4. Shape: **VM.Standard.A1.Flex** (ARM, Ampere)
-   - OCPU count: **4**
-   - Memory: **24 GB**
-5. Add SSH key: **Generate a key pair** → Download both files
-6. Create **Boot volume**: **200 GB** (free)
-7. Click **Create**
-
-Wait 2 minutes for the instance to be ready.
+  ├── Frontend (React)
+  │     └── Push to main → Vercel auto-deploys (free, no card)
+  │
+  ├── VMS-EUREKA-SERVER
+  ├── VMS-API-GATEWAY
+  ├── VMS-AUTH
+  ├── VMS-VENDOR
+  ├── VMS-DOCUMENT
+  ├── VMS-ORDERS
+  ├── VMS-PAYMENTS
+  ├── VMS-DASHBOARD
+  └── VMS-PERFORMANCE
+        └── Push to main → Railway auto-deploys (free, no card)
+```
 
 ---
 
-## Step 3: Connect to Your VM
+## Step 1: Deploy Frontend to Vercel (5 mins)
+
+### 1a. Create Vercel Account
+1. Go to https://vercel.com
+2. Click **Continue with GitHub**
+3. Authorize Vercel
+
+### 1b. Import Your Repo
+1. Click **Add New → Project**
+2. Select **vms-microservices**
+3. Root directory: **frontend-react**
+4. Framework: **Vite** (auto-detected)
+5. Environment variable:
+   - `VITE_API_BASE_URL` = `https://vms-gateway.up.railway.app`
+6. Click **Deploy**
+
+### 1c. Get Vercel Tokens (for GitHub Actions)
+```
+Vercel Dashboard → Settings → Tokens → Create Token
+```
+Name: `github-actions`
+Scope: Full
+
+Also get your **Project ID** and **Org ID**:
+```
+Vercel → Project → Settings → Project ID
+Vercel → Settings → General → Your ID (Org ID)
+```
+
+### 1d. Add GitHub Secrets
+```
+Repo → Settings → Secrets and variables → Actions
+```
+
+| Secret | Value |
+|--------|-------|
+| `VERCEL_TOKEN` | Token from step 1c |
+| `VERCEL_ORG_ID` | Your Vercel Org ID |
+| `VERCEL_PROJECT_ID` | Your Vercel Project ID |
+
+---
+
+## Step 2: Deploy Backend to Railway (10 mins)
+
+### 2a. Create Railway Account
+1. Go to https://railway.app
+2. Click **Continue with GitHub**
+3. No credit card needed!
+
+### 2b. Create a New Project
+1. Click **New Project**
+2. Select **Deploy from GitHub repo**
+3. Select **vms-microservices**
+
+### 2c. Add Each Service
+
+You'll create 9 services under one project. For each service:
+
+| # | Service Name | Root Directory | Port |
+|---|-------------|----------------|------|
+| 1 | vms-eureka | VMS-EUREKA-SERVER | 8761 |
+| 2 | vms-gateway | VMS-API-GATEWAY | 8080 |
+| 3 | vms-auth | VMS-AUTH | 8081 |
+| 4 | vms-vendor | VMS-VENDOR | 8082 |
+| 5 | vms-document | VMS-DOCUMENT | 8083 |
+| 6 | vms-orders | VMS-ORDERS | 8084 |
+| 7 | vms-payments | VMS-PAYMENTS | 8085 |
+| 8 | vms-dashboard | VMS-DASHBOARD | 8087 |
+| 9 | vms-performance | VMS-PERFORMANCE | 8088 |
+
+#### How to add each service:
+```
+Railway Project → New → Service → GitHub Repo → Select branch
+  → Root Directory: VMS-AUTH (for example)
+  → Railway auto-detects Dockerfile → starts building
+```
+
+> **Important**: After the first service deploys, add it manually for subsequent ones.  
+> Or use CLI: `railway service --add`
+
+### 2d. Set Environment Variables
+
+For each service, go to its **Variables** tab and add:
+
+**vms-eureka:**
+```
+PORT=8761
+SPRING_PROFILES_ACTIVE=prod
+EUREKA_INSTANCE_HOSTNAME=vms-eureka.up.railway.app
+EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+EUREKA_CLIENT_FETCH_REGISTRY=false
+```
+
+**vms-gateway:**
+```
+PORT=8080
+SPRING_PROFILES_ACTIVE=prod
+EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
+```
+
+**vms-auth:**
+```
+PORT=8081
+SPRING_PROFILES_ACTIVE=prod
+EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
+SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/authdb
+SPRING_DATASOURCE_USERNAME=neondb_owner
+SPRING_DATASOURCE_PASSWORD=<your-password>
+SPRING_MAIL_USERNAME=<gmail>
+SPRING_MAIL_PASSWORD=<app-password>
+VENDOR_SERVICE_URL=http://vms-vendor.up.railway.app:8082
+```
+
+**vms-vendor:**
+```
+PORT=8082
+SPRING_PROFILES_ACTIVE=prod
+EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
+SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/vendorsdb
+SPRING_DATASOURCE_USERNAME=neondb_owner
+SPRING_DATASOURCE_PASSWORD=<your-password>
+AUTH_SERVICE_URL=http://vms-auth.up.railway.app:8081
+```
+
+**vms-orders:**
+```
+PORT=8084
+SPRING_PROFILES_ACTIVE=prod
+EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
+SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/ordersdb
+SPRING_DATASOURCE_USERNAME=neondb_owner
+SPRING_DATASOURCE_PASSWORD=<your-password>
+```
+
+**vms-payments:**
+```
+PORT=8085
+SPRING_PROFILES_ACTIVE=prod
+EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
+SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/paymentsdb
+SPRING_DATASOURCE_USERNAME=neondb_owner
+SPRING_DATASOURCE_PASSWORD=<your-password>
+```
+
+**vms-document:**
+```
+PORT=8083
+SPRING_PROFILES_ACTIVE=prod
+EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
+SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/documentdb
+SPRING_DATASOURCE_USERNAME=neondb_owner
+SPRING_DATASOURCE_PASSWORD=<your-password>
+AWS_ACCESS_KEY_ID=<your-key>
+AWS_SECRET_ACCESS_KEY=<your-secret>
+AWS_REGION=ap-southeast-1
+```
+
+**vms-dashboard:**
+```
+PORT=8087
+SPRING_PROFILES_ACTIVE=prod
+EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
+```
+
+**vms-performance:**
+```
+PORT=8088
+SPRING_PROFILES_ACTIVE=prod
+EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
+```
+
+---
+
+## Step 3: Verify
+
+After all services deploy (takes ~5-10 min):
 
 ```bash
-# From your local terminal
-ssh -i <downloaded-private-key> ubuntu@<instance-public-ip>
+# Check Eureka
+https://vms-eureka.up.railway.app
 
-# Example:
-ssh -i oracle-key.pem ubuntu@123.45.67.89
+# Check Gateway
+https://vms-gateway.up.railway.app/actuator/health
+
+# Check Frontend
+https://vms-microservices.vercel.app
 ```
 
 ---
 
-## Step 4: Install Everything (Copy-Paste)
+## Step 4: Auto-Deploy Workflow
 
-Run this entire script on your Oracle VM:
+```
+Push to GitHub main
+  ├── GitHub Actions runs Maven build on all 9 services
+  ├── Vercel auto-deploys frontend
+  └── Railway auto-deploys each service (via GitHub integration)
+```
+
+> Railway automatically deploys when code changes in the connected service directory.
+
+---
+
+## Cost: $0
+
+| Resource | Cost |
+|----------|------|
+| Vercel (frontend) | Free forever |
+| Railway (9 services) | $5 free credit (lasts ~1+ month) |
+| Railway sleep mode | Services sleep after inactivity = saves credit |
+| Neon PostgreSQL | Free tier |
+| GitHub Actions | Free |
+
+> When Railway credit runs low, add $5 or use **sleep mode** to stretch it.
+
+---
+
+## Railway CLI (Alternative to Dashboard)
 
 ```bash
-# ============================================
-# Oracle Setup Script - Jenkins + Docker
-# ============================================
+# Install Railway CLI
+npm i -g @railway/cli
 
-# Update system
-sudo apt update && sudo apt upgrade -y
+# Login
+railway login
 
-# Install Java 21
-sudo apt install openjdk-21-jdk-headless -y
+# Link project
+railway link
 
-# Install Docker
-sudo apt install docker.io -y
-sudo systemctl start docker
-sudo systemctl enable docker
+# Deploy a service
+railway up --service vms-auth
 
-# Install Jenkins
-curl -fsSL https://pkg.jenkins.io/debian/jenkins.io-2023.key | sudo tee /usr/share/keyrings/jenkins-keyring.asc
-echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian binary/" | sudo tee /etc/apt/sources.list.d/jenkins.list
-sudo apt update
-sudo apt install jenkins -y
+# View logs
+railway logs --service vms-auth
 
-# Add users to docker group
-sudo usermod -aG docker ubuntu
-sudo usermod -aG docker jenkins
-
-# Configure firewall
-sudo ufw allow 22/tcp
-sudo ufw allow 8080/tcp
-sudo ufw --force enable
-
-# Restart Jenkins
-sudo systemctl restart jenkins
-
-# Install Maven
-sudo apt install maven -y
-
-# Install useful tools
-sudo apt install git curl jq -y
-
-echo "============================================"
-echo "Jenkins URL: http://$(curl -s ifconfig.me):8080"
-echo "Initial Admin Password:"
-sudo cat /var/lib/jenkins/secrets/initialAdminPassword
-echo ""
-echo "============================================"
-```
-
----
-
-## Step 5: Configure Jenkins
-
-### 5a. Access Jenkins
-```
-http://<ORACLE_PUBLIC_IP>:8080
-```
-Paste the initial admin password printed above.
-
-### 5b. Install Plugins
-Select **Install suggested plugins**. Then add these additional ones:
-
-- **Pipeline**
-- **Docker Pipeline**
-- **GitHub Integration**
-- **Credentials Binding**
-- **Blue Ocean** (nicer UI)
-
-### 5c. Create Admin User
-Fill in your details when prompted.
-
-### 5d. Add GitHub Webhook in Jenkins
-1. Dashboard → Manage Jenkins → System
-2. Find **GitHub** section → Add GitHub Server
-3. API URL: `https://api.github.com`
-4. Credentials → Add → Kind: Secret text → Paste your GitHub token
-5. Test connection → Save
-
----
-
-## Step 6: Get Render Deploy Hook URLs
-
-For each service in Render Dashboard:
-1. Go to the service
-2. **Settings** → **Deploy Hook**
-3. Copy the URL
-
-Services to get hooks for:
-
-| Service | Name in Render |
-|---------|---------------|
-| Eureka | `vms-eureka` |
-| Gateway | `vms-gateway` |
-| Auth | `vms-auth` |
-| Vendor | `vms-vendor` |
-| Orders | `vms-orders` |
-| Payments | `vms-payments` |
-| Document | `vms-document` |
-| Dashboard | `vms-dashboard` |
-| Performance | `vms-performance` |
-| Frontend | `vms-frontend` |
-
----
-
-## Step 7: Add Credentials to Jenkins
-
-Dashboard → **Manage Jenkins** → **Credentials** → **System** → **Global credentials** → **Add Credentials**:
-
-| Kind | ID | Value |
-|------|----|-------|
-| Username with password | `DOCKER_HUB_USERNAME` | Your Docker Hub username (blank password) |
-| Secret text | `DOCKER_HUB_TOKEN` | Docker Hub access token |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_EUREKA` | Deploy hook URL for Eureka |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_GATEWAY` | Deploy hook URL for Gateway |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_AUTH` | Deploy hook URL for Auth |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_VENDOR` | Deploy hook URL for Vendor |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_ORDERS` | Deploy hook URL for Orders |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_PAYMENTS` | Deploy hook URL for Payments |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_DOCUMENT` | Deploy hook URL for Document |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_DASHBOARD` | Deploy hook URL for Dashboard |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_PERFORMANCE` | Deploy hook URL for Performance |
-| Secret text | `RENDER_DEPLOY_HOOK_VMS_FRONTEND` | Deploy hook URL for Frontend |
-
----
-
-## Step 8: Create Jenkins Pipeline Job
-
-1. Dashboard → **New Item**
-2. Name: `vms-microservices`
-3. Type: **Pipeline**
-4. Click **OK**
-
-### Configure:
-
-**General** tab:
-- Check **GitHub project**
-- Project URL: `https://github.com/Jay-JD-code/vms-microservices`
-
-**Build Triggers** tab:
-- Check **GitHub hook trigger for GITScm polling**
-
-**Pipeline** tab:
-- **Definition**: Pipeline script from SCM
-- **SCM**: Git
-- **Repository URL**: `https://github.com/Jay-JD-code/vms-microservices.git`
-- **Script Path**: `Jenkinsfile`
-- Click **Save**
-
----
-
-## Step 9: Set Up GitHub Webhook
-
-1. GitHub → **Your repo** → **Settings** → **Webhooks** → **Add webhook**
-2. Payload URL: `http://<ORACLE_PUBLIC_IP>:8080/github-webhook/`
-3. Content type: `application/json`
-4. Events: **Just the push event**
-5. Click **Add webhook**
-
----
-
-## Step 10: Test the Pipeline
-
-1. Push any change to GitHub:
-```bash
-git add . && git commit -m "test deploy" && git push
-```
-
-2. Watch Jenkins run:
-   - Dashboard → `vms-microservices` → **Build History**
-   - Click the build number → **Console Output**
-
-3. Check Render:
-   - Each service should show "Deploy in progress"
-   - Then "Deploy successful"
-
----
-
-## CI/CD Flow Summary
-
-```
-        ┌─────────────────────────────────────┐
-        │   PUSH CODE TO GITHUB               │
-        └──────────┬──────────────────────────┘
-                   │
-        ┌──────────▼──────────────────────────┐
-        │   GITHUB WEBHOOK                    │
-        │   Triggers Jenkins                   │
-        └──────────┬──────────────────────────┘
-                   │
-        ┌──────────▼──────────────────────────┐
-        │   JENKINS (Oracle Free VM)          │
-        │   ├─ Pulls code from GitHub         │
-        │   ├─ Builds ALL 9 services (Maven)  │
-        │   ├─ Pushes Docker images to Hub    │
-        │   └─ Calls Render Deploy Hooks      │
-        └──────────┬──────────────────────────┘
-                   │
-        ┌──────────▼──────────────────────────┐
-        │   RENDER                            │
-        │   ├─ Receives deploy hook           │
-        │   ├─ Pulls code from GitHub         │
-        │   ├─ Builds & deploys each service  │
-        │   └─ Frontend deploys as static     │
-        └──────────┬──────────────────────────┘
-                   │
-        ┌──────────▼──────────────────────────┐
-        │   DEPLOYED ✅                        │
-        │   https://vms-gateway.onrender.com   │
-        │   https://vms-frontend.onrender.com  │
-        └─────────────────────────────────────┘
-```
-
----
-
-## Cost Breakdown: $0/month
-
-| Resource | Details | Cost |
-|----------|---------|------|
-| Oracle VM | 4 CPU, 24GB RAM, 200GB SSD | **$0** |
-| Render | 9 web services + static site | **$0** |
-| Render Cron | Keep-alive job | **$0** |
-| Docker Hub | Public image storage | **$0** |
-| Neon PostgreSQL | Free tier | **$0** |
-| GitHub | Free account | **$0** |
-
-**Total: $0/month**
-
----
-
-## Commands Cheat Sheet
-
-```bash
-# SSH into Oracle VM
-ssh -i oracle-key.pem ubuntu@<oracle-ip>
-
-# Check Jenkins status
-sudo systemctl status jenkins
-
-# Check Jenkins logs
-sudo journalctl -u jenkins -f
-
-# Restart Jenkins
-sudo systemctl restart jenkins
-
-# Check Docker
-docker ps
-sudo docker system prune -f
-
-# View Maven build cache
-ls ~/.m2/repository/
-
-# Test Render hook manually
-curl -X POST <deploy-hook-url>
+# Set variables
+railway variables --service vms-auth set PORT=8081
 ```

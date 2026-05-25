@@ -1,4 +1,4 @@
-name: CI - Build & Deploy to Render
+name: CI/CD - Deploy to Railway + Vercel
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -26,32 +26,20 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-      - name: Build ${{ matrix.service }}
-        run: |
+      - run: |
           cd ${{ matrix.service }}
           mvn clean package -DskipTests
 
-  trigger-render-deploy:
-    needs: build
+  deploy-frontend:
+    needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy Eureka
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_EUREKA }}"
-      - name: Deploy Gateway
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_GATEWAY }}"
-      - name: Deploy Auth
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_AUTH }}"
-      - name: Deploy Vendor
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_VENDOR }}"
-      - name: Deploy Orders
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_ORDERS }}"
-      - name: Deploy Payments
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_PAYMENTS }}"
-      - name: Deploy Document
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_DOCUMENT }}"
-      - name: Deploy Dashboard
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_DASHBOARD }}"
-      - name: Deploy Performance
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_PERFORMANCE }}"
-      - name: Deploy Frontend
-        run: curl -s -X POST "${{ secrets.RENDER_DEPLOY_FRONTEND }}"
+      - uses: actions/checkout@v4
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod'
+          working-directory: ./frontend-react
