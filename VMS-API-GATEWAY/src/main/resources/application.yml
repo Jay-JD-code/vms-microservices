@@ -4,9 +4,7 @@ server:
 spring:
   cloud:
     gateway:
-      server:
-        webmvc:
-          routes:
+      routes:
 
           - id: VMS-AUTH
             uri: http://localhost:8081
