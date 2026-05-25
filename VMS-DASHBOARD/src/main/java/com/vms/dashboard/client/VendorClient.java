@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 
 import com.vms.dashboard.fallback.VendorClientFallback;
 
-@FeignClient(name = "VMS-VENDOR", url = "http://localhost:8082", fallback = VendorClientFallback.class)
+@FeignClient(name = "VMS-VENDOR", fallback = VendorClientFallback.class)
 public interface VendorClient {
 
     @GetMapping("/api/vendors")
