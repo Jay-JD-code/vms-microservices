@@ -1,169 +1,307 @@
-# VMS Microservices - Deployment Guide
+# Jenkins + Render Deployment on Oracle Cloud Free Tier
 
-## Architecture
+## What You Get
 
-```
-GitHub Push → Jenkins (CI) → Render (CD) → 9 Microservices + Frontend
-              │                 │
-              ├─ Maven Build     ├─ Auto-deploy from render.yaml
-              ├─ Push Docker Hub ├─ Free tier (spin down after 15min)
-              └─ Trigger Render  └─ Keep-alive cron prevents sleep
-```
-
----
-
-## Step 1: Render Setup (10 mins)
-
-### 1a. Create Render Account
-Go to https://dashboard.render.com and sign up with GitHub.
-
-### 1b. Connect Your Repository
-- Click **New + → Blueprint**
-- Select `vms-microservices` repo
-- Render reads `render.yaml` and creates all 10 services
-
-### 1c. Fill Environment Variables (secrets)
-After Blueprint sync, Render will prompt for these secrets:
-
-| Service | Secret Variables |
-|---------|-----------------|
-| vms-auth | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` |
-| vms-vendor | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` |
-| vms-orders | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` |
-| vms-payments | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` |
-| vms-document | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` |
-
-Get database URLs from **Neon Dashboard** → Connection Details → Copy JDBC URL.
-
-### 1d. Get Deploy Hook URLs
-For each service in Render Dashboard → Settings → Deploy Hook → Copy URL.
+| Resource | Spec | Cost |
+|----------|------|------|
+| Oracle VM | 4 ARM cores, 24GB RAM, 200GB SSD | **Free forever** |
+| Jenkins | CI/CD server | Free |
+| Render | 9 microservices + frontend | Free |
+| Neon DB | PostgreSQL | Free |
 
 ---
 
-## Step 2: Jenkins Setup (Free EC2 - 15 mins)
+## Step 1: Create Oracle Cloud Account
 
-### 2a. Launch EC2 Instance
-- Go to AWS Console → EC2 → Launch Instance
-- Name: `vms-jenkins`
-- AMI: Ubuntu 22.04 (free tier)
-- Type: t2.micro (free tier)
-- Security Group: Allow ports **22, 8080**
-- Download .pem key
+1. Go to https://cloud.oracle.com
+2. Click **Free Tier** → **Start for free**
+3. Enter payment info (for verification only, won't charge)
+4. After signup, login to the dashboard
 
-### 2b. SSH & Install Jenkins
+---
+
+## Step 2: Create VM Instance
+
+1. Dashboard → **Compute** → **Instances** → **Create Instance**
+2. Name: `vms-jenkins`
+3. Image: **Canonical Ubuntu 22.04** (Minimal)
+4. Shape: **VM.Standard.A1.Flex** (ARM, Ampere)
+   - OCPU count: **4**
+   - Memory: **24 GB**
+5. Add SSH key: **Generate a key pair** → Download both files
+6. Create **Boot volume**: **200 GB** (free)
+7. Click **Create**
+
+Wait 2 minutes for the instance to be ready.
+
+---
+
+## Step 3: Connect to Your VM
+
 ```bash
-ssh -i your-key.pem ubuntu@<jenkins-public-ip>
+# From your local terminal
+ssh -i <downloaded-private-key> ubuntu@<instance-public-ip>
 
-# Install Java
-sudo apt update && sudo apt install openjdk-21-jdk docker.io -y
+# Example:
+ssh -i oracle-key.pem ubuntu@123.45.67.89
+```
+
+---
+
+## Step 4: Install Everything (Copy-Paste)
+
+Run this entire script on your Oracle VM:
+
+```bash
+# ============================================
+# Oracle Setup Script - Jenkins + Docker
+# ============================================
+
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install Java 21
+sudo apt install openjdk-21-jdk-headless -y
+
+# Install Docker
+sudo apt install docker.io -y
+sudo systemctl start docker
+sudo systemctl enable docker
 
 # Install Jenkins
 curl -fsSL https://pkg.jenkins.io/debian/jenkins.io-2023.key | sudo tee /usr/share/keyrings/jenkins-keyring.asc
 echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian binary/" | sudo tee /etc/apt/sources.list.d/jenkins.list
-sudo apt update && sudo apt install jenkins -y
+sudo apt update
+sudo apt install jenkins -y
 
-# Add jenkins user to docker group
+# Add users to docker group
+sudo usermod -aG docker ubuntu
 sudo usermod -aG docker jenkins
+
+# Configure firewall
+sudo ufw allow 22/tcp
+sudo ufw allow 8080/tcp
+sudo ufw --force enable
+
+# Restart Jenkins
 sudo systemctl restart jenkins
 
-# Get initial password
+# Install Maven
+sudo apt install maven -y
+
+# Install useful tools
+sudo apt install git curl jq -y
+
+echo "============================================"
+echo "Jenkins URL: http://$(curl -s ifconfig.me):8080"
+echo "Initial Admin Password:"
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+echo ""
+echo "============================================"
 ```
 
-### 2c. Configure Jenkins
-1. Open: `http://<jenkins-public-ip>:8080`
-2. Enter initial admin password
-3. Install suggested plugins
-4. Create admin user
+---
 
-### 2d. Install Plugins
-Manage Jenkins → Plugins → Available Plugins:
-- Pipeline
-- Docker Pipeline
-- GitHub Integration
-- Credentials Binding
+## Step 5: Configure Jenkins
 
-### 2e. Add Credentials
-Manage Jenkins → Credentials → System → Global → Add:
-- `DOCKER_HUB_USERNAME`: Your Docker Hub username
-- `DOCKER_HUB_TOKEN`: Your Docker Hub access token
-- Add each Render Deploy Hook URL as a secret text credential
+### 5a. Access Jenkins
+```
+http://<ORACLE_PUBLIC_IP>:8080
+```
+Paste the initial admin password printed above.
 
-### 2f. Create Pipeline Job
-1. New Item → `vms-pipeline` → Pipeline
-2. Definition: Pipeline script from SCM
-3. SCM: Git → `https://github.com/Jay-JD-code/vms-microservices.git`
-4. Script Path: `Jenkinsfile`
-5. Save & Build
+### 5b. Install Plugins
+Select **Install suggested plugins**. Then add these additional ones:
+
+- **Pipeline**
+- **Docker Pipeline**
+- **GitHub Integration**
+- **Credentials Binding**
+- **Blue Ocean** (nicer UI)
+
+### 5c. Create Admin User
+Fill in your details when prompted.
+
+### 5d. Add GitHub Webhook in Jenkins
+1. Dashboard → Manage Jenkins → System
+2. Find **GitHub** section → Add GitHub Server
+3. API URL: `https://api.github.com`
+4. Credentials → Add → Kind: Secret text → Paste your GitHub token
+5. Test connection → Save
 
 ---
 
-## Step 3: Configure Webhook (Auto-Trigger)
+## Step 6: Get Render Deploy Hook URLs
 
-GitHub → Repo → Settings → Webhooks → Add webhook:
-- Payload URL: `http://<jenkins-public-ip>:8080/github-webhook/`
-- Content type: application/json
-- Events: Push events
+For each service in Render Dashboard:
+1. Go to the service
+2. **Settings** → **Deploy Hook**
+3. Copy the URL
+
+Services to get hooks for:
+
+| Service | Name in Render |
+|---------|---------------|
+| Eureka | `vms-eureka` |
+| Gateway | `vms-gateway` |
+| Auth | `vms-auth` |
+| Vendor | `vms-vendor` |
+| Orders | `vms-orders` |
+| Payments | `vms-payments` |
+| Document | `vms-document` |
+| Dashboard | `vms-dashboard` |
+| Performance | `vms-performance` |
+| Frontend | `vms-frontend` |
 
 ---
 
-## Step 4: Verify Deployment
+## Step 7: Add Credentials to Jenkins
 
-After Jenkins and Render finish deploying:
+Dashboard → **Manage Jenkins** → **Credentials** → **System** → **Global credentials** → **Add Credentials**:
+
+| Kind | ID | Value |
+|------|----|-------|
+| Username with password | `DOCKER_HUB_USERNAME` | Your Docker Hub username (blank password) |
+| Secret text | `DOCKER_HUB_TOKEN` | Docker Hub access token |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_EUREKA` | Deploy hook URL for Eureka |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_GATEWAY` | Deploy hook URL for Gateway |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_AUTH` | Deploy hook URL for Auth |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_VENDOR` | Deploy hook URL for Vendor |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_ORDERS` | Deploy hook URL for Orders |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_PAYMENTS` | Deploy hook URL for Payments |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_DOCUMENT` | Deploy hook URL for Document |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_DASHBOARD` | Deploy hook URL for Dashboard |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_PERFORMANCE` | Deploy hook URL for Performance |
+| Secret text | `RENDER_DEPLOY_HOOK_VMS_FRONTEND` | Deploy hook URL for Frontend |
+
+---
+
+## Step 8: Create Jenkins Pipeline Job
+
+1. Dashboard → **New Item**
+2. Name: `vms-microservices`
+3. Type: **Pipeline**
+4. Click **OK**
+
+### Configure:
+
+**General** tab:
+- Check **GitHub project**
+- Project URL: `https://github.com/Jay-JD-code/vms-microservices`
+
+**Build Triggers** tab:
+- Check **GitHub hook trigger for GITScm polling**
+
+**Pipeline** tab:
+- **Definition**: Pipeline script from SCM
+- **SCM**: Git
+- **Repository URL**: `https://github.com/Jay-JD-code/vms-microservices.git`
+- **Script Path**: `Jenkinsfile`
+- Click **Save**
+
+---
+
+## Step 9: Set Up GitHub Webhook
+
+1. GitHub → **Your repo** → **Settings** → **Webhooks** → **Add webhook**
+2. Payload URL: `http://<ORACLE_PUBLIC_IP>:8080/github-webhook/`
+3. Content type: `application/json`
+4. Events: **Just the push event**
+5. Click **Add webhook**
+
+---
+
+## Step 10: Test the Pipeline
+
+1. Push any change to GitHub:
+```bash
+git add . && git commit -m "test deploy" && git push
+```
+
+2. Watch Jenkins run:
+   - Dashboard → `vms-microservices` → **Build History**
+   - Click the build number → **Console Output**
+
+3. Check Render:
+   - Each service should show "Deploy in progress"
+   - Then "Deploy successful"
+
+---
+
+## CI/CD Flow Summary
+
+```
+        ┌─────────────────────────────────────┐
+        │   PUSH CODE TO GITHUB               │
+        └──────────┬──────────────────────────┘
+                   │
+        ┌──────────▼──────────────────────────┐
+        │   GITHUB WEBHOOK                    │
+        │   Triggers Jenkins                   │
+        └──────────┬──────────────────────────┘
+                   │
+        ┌──────────▼──────────────────────────┐
+        │   JENKINS (Oracle Free VM)          │
+        │   ├─ Pulls code from GitHub         │
+        │   ├─ Builds ALL 9 services (Maven)  │
+        │   ├─ Pushes Docker images to Hub    │
+        │   └─ Calls Render Deploy Hooks      │
+        └──────────┬──────────────────────────┘
+                   │
+        ┌──────────▼──────────────────────────┐
+        │   RENDER                            │
+        │   ├─ Receives deploy hook           │
+        │   ├─ Pulls code from GitHub         │
+        │   ├─ Builds & deploys each service  │
+        │   └─ Frontend deploys as static     │
+        └──────────┬──────────────────────────┘
+                   │
+        ┌──────────▼──────────────────────────┐
+        │   DEPLOYED ✅                        │
+        │   https://vms-gateway.onrender.com   │
+        │   https://vms-frontend.onrender.com  │
+        └─────────────────────────────────────┘
+```
+
+---
+
+## Cost Breakdown: $0/month
+
+| Resource | Details | Cost |
+|----------|---------|------|
+| Oracle VM | 4 CPU, 24GB RAM, 200GB SSD | **$0** |
+| Render | 9 web services + static site | **$0** |
+| Render Cron | Keep-alive job | **$0** |
+| Docker Hub | Public image storage | **$0** |
+| Neon PostgreSQL | Free tier | **$0** |
+| GitHub | Free account | **$0** |
+
+**Total: $0/month**
+
+---
+
+## Commands Cheat Sheet
 
 ```bash
-# Eureka Dashboard
-https://vms-eureka.onrender.com
+# SSH into Oracle VM
+ssh -i oracle-key.pem ubuntu@<oracle-ip>
 
-# API Gateway Health
-https://vms-gateway.onrender.com/actuator/health
+# Check Jenkins status
+sudo systemctl status jenkins
 
-# Frontend
-https://vms-frontend.onrender.com
+# Check Jenkins logs
+sudo journalctl -u jenkins -f
+
+# Restart Jenkins
+sudo systemctl restart jenkins
+
+# Check Docker
+docker ps
+sudo docker system prune -f
+
+# View Maven build cache
+ls ~/.m2/repository/
+
+# Test Render hook manually
+curl -X POST <deploy-hook-url>
 ```
-
----
-
-## CI/CD Flow
-
-```
-Developer pushes to GitHub main branch
-         │
-         ▼
-GitHub Webhook triggers Jenkins
-         │
-         ▼
-Jenkins Pipeline starts:
-  ├─ Stage 1: Build ALL 9 services (parallel Maven)
-  ├─ Stage 2: Push Docker images to Docker Hub
-  └─ Stage 3: Call Render Deploy Hooks
-         │
-         ▼
-Render pulls latest code from GitHub
-  ├─ Builds & deploys each service
-  └─ Frontend auto-deploys as static site
-```
-
----
-
-## Cost: $0/month
-
-| Resource | Cost |
-|----------|------|
-| Render (9 web services + 1 static site) | Free* |
-| Render Cron Job (keep-alive) | Free |
-| Jenkins on EC2 t2.micro | Free tier |
-| Neon PostgreSQL | Free tier |
-| Docker Hub | Free |
-| GitHub | Free |
-
-*Free services spin down after 15 min of inactivity. The keep-alive cron job prevents this.
-
----
-
-## Notes
-
-- **Spin-down**: Free Render services sleep after 15 minutes idle. First request after sleep takes ~30s.
-- **Keep-alive**: The cron job pings services every 10 minutes to prevent sleep.
-- **Database**: Use Neon or Render's free PostgreSQL. Render free DB also spins down.
-- **Secrets**: All DB passwords, AWS keys, and mail passwords use `sync: false` in render.yaml - you must enter them manually in Render Dashboard.
