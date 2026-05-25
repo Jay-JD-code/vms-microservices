@@ -5,36 +5,31 @@ spring:
   cloud:
     gateway:
       routes:
-
-          - id: VMS-AUTH
-            uri: http://localhost:8081
-            predicates:
-              - Path=/api/auth/**,/api/organizations/**
-          - id: VMS-VENDOR
-            uri: http://localhost:8082
-            predicates:
-              - Path=/api/vendors/**,/api/partnerships/**																															
-          - id: VMS-DOCUMENT
-            uri: http://localhost:8083
-            predicates:
-              - Path=/api/documents/**
-
-          - id: VMS-ORDERS
-            uri: http://localhost:8084
-            predicates:
-              - Path=/api/orders/**,/api/invoices/**
-
-          - id: VMS-PAYMENTS
-            uri: http://localhost:8085
-            predicates:
-              - Path=/api/payments/**
-
-          - id: VMS-PERFORMANCE
-            uri: http://localhost:8086
-            predicates:
-              - Path=/api/performance/**
-
-          - id: VMS-DASHBOARD
-            uri: http://localhost:8087
-            predicates:
-              - Path=/api/dashboard/**
+      - id: VMS-AUTH
+        uri: lb://VMS-AUTH
+        predicates:
+          - Path=/api/auth/**,/api/organizations/**
+      - id: VMS-VENDOR
+        uri: lb://VMS-VENDOR
+        predicates:
+          - Path=/api/vendors/**,/api/partnerships/**
+      - id: VMS-DOCUMENT
+        uri: lb://VMS-DOCUMENT
+        predicates:
+          - Path=/api/documents/**
+      - id: VMS-ORDERS
+        uri: lb://VMS-ORDERS
+        predicates:
+          - Path=/api/orders/**,/api/invoices/**
+      - id: VMS-PAYMENTS
+        uri: lb://VMS-PAYMENTS
+        predicates:
+          - Path=/api/payments/**
+      - id: VMS-PERFORMANCE
+        uri: lb://VMS-PERFORMANCE
+        predicates:
+          - Path=/api/performance/**
+      - id: VMS-DASHBOARD
+        uri: lb://VMS-DASHBOARD
+        predicates:
+          - Path=/api/dashboard/**

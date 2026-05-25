@@ -1,33 +1,24 @@
 package com.vms.gateway.filter;
 
-
-import jakarta.servlet.*;
-
-import jakarta.servlet.http.HttpServletRequest;
-
+import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.cloud.gateway.filter.GlobalFilter;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
-
-import java.io.IOException;
+import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
 @Component
-public class LoggingFilter implements Filter {
+@Order(-1)
+public class LoggingFilter implements GlobalFilter {
 
     @Override
-    public void doFilter(
-            ServletRequest request,
-            ServletResponse response,
-            FilterChain chain
-    ) throws IOException, ServletException {
-
-        HttpServletRequest req = (HttpServletRequest) request;
-
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         System.out.println(
-                "Gateway Request → "
-                        + req.getMethod()
+                "Gateway Request \u2192 "
+                        + exchange.getRequest().getMethod()
                         + " "
-                        + req.getRequestURI()
+                        + exchange.getRequest().getURI().getPath()
         );
-
-        chain.doFilter(request, response);
+        return chain.filter(exchange);
     }
 }
