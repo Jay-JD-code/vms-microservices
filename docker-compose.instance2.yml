@@ -1,0 +1,47 @@
+services:
+  auth:
+    image: ${DOCKER_USER}/vms-auth:latest
+    container_name: auth
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://${EUREKA_IP}:8761/eureka
+      - SPRING_DATASOURCE_URL=${AUTH_DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASS}
+      - SPRING_MAIL_USERNAME=${MAIL_USER}
+      - SPRING_MAIL_PASSWORD=${MAIL_PASS}
+      - VENDOR_SERVICE_URL=http://${VENDOR_IP}:8082
+    mem_limit: 256m
+    restart: unless-stopped
+
+  vendor:
+    image: ${DOCKER_USER}/vms-vendor:latest
+    container_name: vendor
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://${EUREKA_IP}:8761/eureka
+      - SPRING_DATASOURCE_URL=${VENDOR_DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASS}
+      - AUTH_SERVICE_URL=http://${AUTH_IP}:8081
+    mem_limit: 256m
+    restart: unless-stopped
+
+  dashboard:
+    image: ${DOCKER_USER}/vms-dashboard:latest
+    container_name: dashboard
+    ports:
+      - "8087:8087"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://${EUREKA_IP}:8761/eureka
+    mem_limit: 256m
+    restart: unless-stopped
+
+networks:
+  default:
+    name: vms-network

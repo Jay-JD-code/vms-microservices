@@ -1,262 +1,171 @@
-# VMS Deployment - Railway + Vercel (No Card Required)
+# Step 1: Set Up GitHub Actions Secrets
 
-## Architecture
-
-```
-GitHub
-
-  ├── Frontend (React)
-  │     └── Push to main → Vercel auto-deploys (free, no card)
-  │
-  ├── VMS-EUREKA-SERVER
-  ├── VMS-API-GATEWAY
-  ├── VMS-AUTH
-  ├── VMS-VENDOR
-  ├── VMS-DOCUMENT
-  ├── VMS-ORDERS
-  ├── VMS-PAYMENTS
-  ├── VMS-DASHBOARD
-  └── VMS-PERFORMANCE
-        └── Push to main → Railway auto-deploys (free, no card)
-```
-
----
-
-## Step 1: Deploy Frontend to Vercel (5 mins)
-
-### 1a. Create Vercel Account
-1. Go to https://vercel.com
-2. Click **Continue with GitHub**
-3. Authorize Vercel
-
-### 1b. Import Your Repo
-1. Click **Add New → Project**
-2. Select **vms-microservices**
-3. Root directory: **frontend-react**
-4. Framework: **Vite** (auto-detected)
-5. Environment variable:
-   - `VITE_API_BASE_URL` = `https://vms-gateway.up.railway.app`
-6. Click **Deploy**
-
-### 1c. Get Vercel Tokens (for GitHub Actions)
-```
-Vercel Dashboard → Settings → Tokens → Create Token
-```
-Name: `github-actions`
-Scope: Full
-
-Also get your **Project ID** and **Org ID**:
-```
-Vercel → Project → Settings → Project ID
-Vercel → Settings → General → Your ID (Org ID)
-```
-
-### 1d. Add GitHub Secrets
-```
-Repo → Settings → Secrets and variables → Actions
-```
+Go to **Repo → Settings → Secrets and variables → Actions → New repository secret**:
 
 | Secret | Value |
 |--------|-------|
-| `VERCEL_TOKEN` | Token from step 1c |
-| `VERCEL_ORG_ID` | Your Vercel Org ID |
-| `VERCEL_PROJECT_ID` | Your Vercel Project ID |
+| `DOCKER_USER` | Your Docker Hub username |
+| `DOCKER_PASS` | Docker Hub access token (Settings → Security → Access Tokens) |
+
+After adding secrets, push to main:
+```bash
+git add . && git commit -m "update" && git push
+```
+GitHub Actions will build all 9 Docker images and push them to Docker Hub.
 
 ---
 
-## Step 2: Deploy Backend to Railway (10 mins)
+# Step 2: Connect to Each EC2 Instance
 
-### 2a. Create Railway Account
-1. Go to https://railway.app
-2. Click **Continue with GitHub**
-3. No credit card needed!
+Open **AWS Console → EC2 → Instances** → Select instance → Click **Connect**
 
-### 2b. Create a New Project
-1. Click **New Project**
-2. Select **Deploy from GitHub repo**
-3. Select **vms-microservices**
+Choose **EC2 Instance Connect** (browser terminal, no SSH needed)
 
-### 2c. Add Each Service
-
-You'll create 9 services under one project. For each service:
-
-| # | Service Name | Root Directory | Port |
-|---|-------------|----------------|------|
-| 1 | vms-eureka | VMS-EUREKA-SERVER | 8761 |
-| 2 | vms-gateway | VMS-API-GATEWAY | 8080 |
-| 3 | vms-auth | VMS-AUTH | 8081 |
-| 4 | vms-vendor | VMS-VENDOR | 8082 |
-| 5 | vms-document | VMS-DOCUMENT | 8083 |
-| 6 | vms-orders | VMS-ORDERS | 8084 |
-| 7 | vms-payments | VMS-PAYMENTS | 8085 |
-| 8 | vms-dashboard | VMS-DASHBOARD | 8087 |
-| 9 | vms-performance | VMS-PERFORMANCE | 8088 |
-
-#### How to add each service:
-```
-Railway Project → New → Service → GitHub Repo → Select branch
-  → Root Directory: VMS-AUTH (for example)
-  → Railway auto-detects Dockerfile → starts building
-```
-
-> **Important**: After the first service deploys, add it manually for subsequent ones.  
-> Or use CLI: `railway service --add`
-
-### 2d. Set Environment Variables
-
-For each service, go to its **Variables** tab and add:
-
-**vms-eureka:**
-```
-PORT=8761
-SPRING_PROFILES_ACTIVE=prod
-EUREKA_INSTANCE_HOSTNAME=vms-eureka.up.railway.app
-EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
-EUREKA_CLIENT_FETCH_REGISTRY=false
-```
-
-**vms-gateway:**
-```
-PORT=8080
-SPRING_PROFILES_ACTIVE=prod
-EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
-```
-
-**vms-auth:**
-```
-PORT=8081
-SPRING_PROFILES_ACTIVE=prod
-EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
-SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/authdb
-SPRING_DATASOURCE_USERNAME=neondb_owner
-SPRING_DATASOURCE_PASSWORD=<your-password>
-SPRING_MAIL_USERNAME=<gmail>
-SPRING_MAIL_PASSWORD=<app-password>
-VENDOR_SERVICE_URL=http://vms-vendor.up.railway.app:8082
-```
-
-**vms-vendor:**
-```
-PORT=8082
-SPRING_PROFILES_ACTIVE=prod
-EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
-SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/vendorsdb
-SPRING_DATASOURCE_USERNAME=neondb_owner
-SPRING_DATASOURCE_PASSWORD=<your-password>
-AUTH_SERVICE_URL=http://vms-auth.up.railway.app:8081
-```
-
-**vms-orders:**
-```
-PORT=8084
-SPRING_PROFILES_ACTIVE=prod
-EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
-SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/ordersdb
-SPRING_DATASOURCE_USERNAME=neondb_owner
-SPRING_DATASOURCE_PASSWORD=<your-password>
-```
-
-**vms-payments:**
-```
-PORT=8085
-SPRING_PROFILES_ACTIVE=prod
-EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
-SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/paymentsdb
-SPRING_DATASOURCE_USERNAME=neondb_owner
-SPRING_DATASOURCE_PASSWORD=<your-password>
-```
-
-**vms-document:**
-```
-PORT=8083
-SPRING_PROFILES_ACTIVE=prod
-EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
-SPRING_DATASOURCE_URL=jdbc:postgresql://<neon-host>:5432/documentdb
-SPRING_DATASOURCE_USERNAME=neondb_owner
-SPRING_DATASOURCE_PASSWORD=<your-password>
-AWS_ACCESS_KEY_ID=<your-key>
-AWS_SECRET_ACCESS_KEY=<your-secret>
-AWS_REGION=ap-southeast-1
-```
-
-**vms-dashboard:**
-```
-PORT=8087
-SPRING_PROFILES_ACTIVE=prod
-EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
-```
-
-**vms-performance:**
-```
-PORT=8088
-SPRING_PROFILES_ACTIVE=prod
-EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://vms-eureka.up.railway.app:8761/eureka
-```
+| Instance | Public IP | Services |
+|----------|-----------|----------|
+| **1** | 13.232.112.215 | Eureka + Gateway |
+| **2** | 13.234.231.156 | Auth + Vendor + Dashboard |
+| **3** | 43.205.238.9 | Orders + Payments + Document + Performance |
 
 ---
 
-## Step 3: Verify
+# Step 3: Setup Instance 1 (Eureka + Gateway)
 
-After all services deploy (takes ~5-10 min):
+Connect via browser terminal (EC2 Console → Connect), then paste:
 
 ```bash
-# Check Eureka
-https://vms-eureka.up.railway.app
+# Install Docker
+sudo apt update && sudo apt install docker.io docker-compose -y
+sudo systemctl start docker && sudo systemctl enable docker
 
-# Check Gateway
-https://vms-gateway.up.railway.app/actuator/health
+# Clone repo
+git clone https://github.com/Jay-JD-code/vms-microservices.git /home/ubuntu/vms
+cd /home/ubuntu/vms
 
-# Check Frontend
-https://vms-microservices.vercel.app
+# Create .env file
+cat > .env << 'EOF'
+DOCKER_USER=your-dockerhub-username
+EUREKA_IP=13.232.112.215
+EOF
+
+# Download docker-compose file
+curl -sL https://raw.githubusercontent.com/Jay-JD-code/vms-microservices/main/docker-compose.instance1.yml -o docker-compose.yml
+
+# Docker login
+docker login -u "$(grep DOCKER_USER .env | cut -d= -f2)"
+# (enter your Docker Hub password/token when prompted)
+
+# Start services
+docker compose up -d
+
+# Verify
+docker compose ps
+curl http://localhost:8761
+curl http://localhost:8080/actuator/health
+
+# Allow firewall
+sudo ufw allow 8761/tcp && sudo ufw allow 8080/tcp && sudo ufw --force enable
 ```
 
 ---
 
-## Step 4: Auto-Deploy Workflow
+# Step 4: Setup Instance 2 (Auth + Vendor + Dashboard)
 
-```
-Push to GitHub main
-  ├── GitHub Actions runs Maven build on all 9 services
-  ├── Vercel auto-deploys frontend
-  └── Railway auto-deploys each service (via GitHub integration)
-```
-
-> Railway automatically deploys when code changes in the connected service directory.
-
----
-
-## Cost: $0
-
-| Resource | Cost |
-|----------|------|
-| Vercel (frontend) | Free forever |
-| Railway (9 services) | $5 free credit (lasts ~1+ month) |
-| Railway sleep mode | Services sleep after inactivity = saves credit |
-| Neon PostgreSQL | Free tier |
-| GitHub Actions | Free |
-
-> When Railway credit runs low, add $5 or use **sleep mode** to stretch it.
-
----
-
-## Railway CLI (Alternative to Dashboard)
+Connect via browser terminal, then paste:
 
 ```bash
-# Install Railway CLI
-npm i -g @railway/cli
+sudo apt update && sudo apt install docker.io docker-compose -y
+sudo systemctl start docker && sudo systemctl enable docker
 
-# Login
-railway login
+git clone https://github.com/Jay-JD-code/vms-microservices.git /home/ubuntu/vms
+cd /home/ubuntu/vms
 
-# Link project
-railway link
+cat > .env << 'EOF'
+DOCKER_USER=your-dockerhub-username
+EUREKA_IP=13.232.112.215
+AUTH_IP=13.234.231.156
+VENDOR_IP=13.234.231.156
+DB_USER=neondb_owner
+DB_PASS=<your-neon-password>
+AUTH_DB_URL=jdbc:postgresql://<neon-host>:5432/authdb
+VENDOR_DB_URL=jdbc:postgresql://<neon-host>:5432/vendorsdb
+MAIL_USER=your-email@gmail.com
+MAIL_PASS=your-app-password
+EOF
 
-# Deploy a service
-railway up --service vms-auth
+curl -sL https://raw.githubusercontent.com/Jay-JD-code/vms-microservices/main/docker-compose.instance2.yml -o docker-compose.yml
 
-# View logs
-railway logs --service vms-auth
+docker login -u "$(grep DOCKER_USER .env | cut -d= -f2)"
 
-# Set variables
-railway variables --service vms-auth set PORT=8081
+docker compose up -d
+
+sudo ufw allow 8081/tcp && sudo ufw allow 8082/tcp && sudo ufw allow 8087/tcp && sudo ufw --force enable
+```
+
+---
+
+# Step 5: Setup Instance 3 (Orders + Payments + Document + Performance)
+
+Connect via browser terminal, then paste:
+
+```bash
+sudo apt update && sudo apt install docker.io docker-compose -y
+sudo systemctl start docker && sudo systemctl enable docker
+
+git clone https://github.com/Jay-JD-code/vms-microservices.git /home/ubuntu/vms
+cd /home/ubuntu/vms
+
+cat > .env << 'EOF'
+DOCKER_USER=your-dockerhub-username
+EUREKA_IP=13.232.112.215
+DB_USER=neondb_owner
+DB_PASS=<your-neon-password>
+ORDERS_DB_URL=jdbc:postgresql://<neon-host>:5432/ordersdb
+PAYMENTS_DB_URL=jdbc:postgresql://<neon-host>:5432/paymentsdb
+DOCUMENT_DB_URL=jdbc:postgresql://<neon-host>:5432/documentdb
+AWS_ACCESS_KEY=your-aws-key
+AWS_SECRET_KEY=your-aws-secret
+AWS_REGION=ap-south-1
+EOF
+
+curl -sL https://raw.githubusercontent.com/Jay-JD-code/vms-microservices/main/docker-compose.instance3.yml -o docker-compose.yml
+
+docker login -u "$(grep DOCKER_USER .env | cut -d= -f2)"
+
+docker compose up -d
+
+sudo ufw allow 8083/tcp && sudo ufw allow 8084/tcp && sudo ufw allow 8085/tcp && sudo ufw allow 8088/tcp && sudo ufw --force enable
+```
+
+---
+
+# Step 6: Deploy Frontend (Vercel - Free, No Card)
+
+1. Go to https://vercel.com → Sign up with GitHub
+2. **Add New → Project** → Select `vms-microservices`
+3. Root directory: `frontend-react`
+4. Framework: **Vite**
+5. Env variable: `VITE_API_BASE_URL` = `http://13.232.112.215:8080`
+6. Click **Deploy**
+
+---
+
+# Step 7: Verify
+
+| Service | URL |
+|---------|-----|
+| Eureka | http://13.232.112.215:8761 |
+| API Gateway | http://13.232.112.215:8080 |
+| Frontend | https://vms-microservices.vercel.app |
+
+---
+
+# Updating (After Code Changes)
+
+1. Push code to GitHub → GitHub Actions builds new Docker images
+2. On each EC2, run:
+```bash
+cd /home/ubuntu/vms
+docker compose pull
+docker compose up -d
 ```

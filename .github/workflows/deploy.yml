@@ -1,45 +1,49 @@
-name: CI/CD - Deploy to Railway + Vercel
+name: Build & Push Docker Images
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  DOCKER_USER: ${{ secrets.DOCKER_USER }}
+
 jobs:
-  test:
+  build-and-push:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         service:
-          - VMS-EUREKA-SERVER
-          - VMS-API-GATEWAY
-          - VMS-AUTH
-          - VMS-VENDOR
-          - VMS-DOCUMENT
-          - VMS-ORDERS
-          - VMS-PAYMENTS
-          - VMS-DASHBOARD
-          - VMS-PERFORMANCE
+          - dir: VMS-EUREKA-SERVER
+            name: vms-eureka-server
+          - dir: VMS-API-GATEWAY
+            name: vms-api-gateway
+          - dir: VMS-AUTH
+            name: vms-auth
+          - dir: VMS-VENDOR
+            name: vms-vendor
+          - dir: VMS-DOCUMENT
+            name: vms-document
+          - dir: VMS-ORDERS
+            name: vms-orders
+          - dir: VMS-PAYMENTS
+            name: vms-payments
+          - dir: VMS-DASHBOARD
+            name: vms-dashboard
+          - dir: VMS-PERFORMANCE
+            name: vms-performance
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-      - run: |
-          cd ${{ matrix.service }}
-          mvn clean package -DskipTests
 
-  deploy-frontend:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: '--prod'
-          working-directory: ./frontend-react
+          username: ${{ secrets.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PASS }}
+
+      - name: Build & Push ${{ matrix.service.name }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service.dir }}
+          push: true
+          tags: ${{ secrets.DOCKER_USER }}/${{ matrix.service.name }}:latest
