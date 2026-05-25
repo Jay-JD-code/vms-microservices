@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+
+  orders:
+    image: ${DOCKER_USER}/vms-orders:latest
+    container_name: orders
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://${EUREKA_IP}:8761/eureka
+      - SPRING_DATASOURCE_URL=${ORDERS_DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASS}
+    mem_limit: 200m
+    restart: unless-stopped
+
+  payments:
+    image: ${DOCKER_USER}/vms-payments:latest
+    container_name: payments
+    ports:
+      - "8085:8085"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://${EUREKA_IP}:8761/eureka
+      - SPRING_DATASOURCE_URL=${PAYMENTS_DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASS}
+    mem_limit: 200m
+    restart: unless-stopped
+
+  document:
+    image: ${DOCKER_USER}/vms-document:latest
+    container_name: document
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://${EUREKA_IP}:8761/eureka
+      - SPRING_DATASOURCE_URL=${DOCUMENT_DB_URL}
+      - SPRING_DATASOURCE_USERNAME=${DB_USER}
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASS}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_KEY}
+      - AWS_REGION=${AWS_REGION}
+    mem_limit: 200m
+    restart: unless-stopped
+
+  performance:
+    image: ${DOCKER_USER}/vms-performance:latest
+    container_name: performance
+    ports:
+      - "8088:8088"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://${EUREKA_IP}:8761/eureka
+    mem_limit: 200m
+    restart: unless-stopped
+
+networks:
+  default:
+    name: vms-network

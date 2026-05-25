@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+
+  eureka:
+    image: ${DOCKER_USER}/vms-eureka-server:latest
+    container_name: eureka
+    ports:
+      - "8761:8761"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+    mem_limit: 200m
+    restart: unless-stopped
+
+  api-gateway:
+    image: ${DOCKER_USER}/vms-api-gateway:latest
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - eureka
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE=http://eureka:8761/eureka
+    mem_limit: 200m
+    restart: unless-stopped
+
+networks:
+  default:
+    name: vms-network
